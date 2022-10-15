@@ -4,6 +4,6 @@ data Term
   = Var Int
   | Type Int
   | Pi Term Term
-  | Lam Term Term
+  | Lam Term
   | App Term Term
   deriving (Show)

@@ -8,7 +8,7 @@ data RTerm
   = RIrreducible Irreducible RTerm
   | RType Int
   | RPi RTerm Closure
-  | RLam RTerm Closure
+  | RLam Closure
   deriving (Show)
 
 data Irreducible
@@ -87,9 +87,7 @@ typecheckType c (App f x) = do
 typecheckType _ _ = fail "Type expected"
 
 typecheckPi :: Ctx -> RTerm -> Term -> REnv -> Term -> Error ()
-typecheckPi c a b e (Lam a' x) = do
-  a'' <- reduce (map snd c) a'
-  unifyType (map snd c) a a''
+typecheckPi c a b e (Lam x) = do
   b' <- reduce (RIrreducible (IVar (length c)) a : e) b
   typecheck ((a, RIrreducible (IVar (length c)) a) : c) b' x
 typecheckPi _ _ _ _ (App _ _) = fail "Unreachable code"
@@ -106,7 +104,7 @@ infer c (Pi a b) = do
   b' <- infer ((a', RIrreducible (IVar (length c)) a') : c) b
   m <- getLevel b'
   return $ RType (max n m)
-infer _ (Lam _ _) = fail "Cannot infer the type of a lambda"
+infer _ (Lam _) = fail "Cannot infer the type of a lambda"
 infer c (App f x) = do
   a' <- infer c f
   (a, (b, e)) <- getPi a'
@@ -132,9 +130,8 @@ reduce _ (Type n) = return $ RType n
 reduce e (Pi a b) = do
   a' <- reduce e a
   return $ RPi a' (b, e)
-reduce e (Lam a x) = do
-  a' <- reduce e a
-  return $ RLam a' (x, e)
+reduce e (Lam x) = do
+  return $ RLam (x, e)
 reduce e (App f x) = do
   f' <- reduce e f
   x' <- reduce e x
@@ -144,7 +141,7 @@ reduceApp :: RTerm -> RTerm -> Error RTerm
 reduceApp (RIrreducible f (RPi a (b, e))) x = do
   b' <- reduce (x : e) b
   return $ RIrreducible (IApp f x a) b'
-reduceApp (RLam _ (f, e)) x = reduce (x : e) f
+reduceApp (RLam (f, e)) x = reduce (x : e) f
 reduceApp _ _ = fail "Function expected"
 
 unify :: RCtx -> RTerm -> RTerm -> RTerm -> Error ()
