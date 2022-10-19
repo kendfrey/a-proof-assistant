@@ -18,7 +18,9 @@ newtype RTypeTerm = Tp RTerm
 
 type Closure = (String, Term, Env)
 
-newtype Ctx = Ctx [(RTypeTerm, RTerm)]
+data Ctx
+  = EmptyCtx
+  | Ctx :- (RTypeTerm, RTerm)
 
 type Env = [RTerm]
 
@@ -36,8 +38,8 @@ instance Show RTypeTerm where
   show (Tp x) = show x
 
 instance Show Ctx where
-  show (Ctx []) = ""
-  show (Ctx ((a, x) : c)) = show (Ctx c) ++ show a ++ " := " ++ show x ++ "\n"
+  show EmptyCtx = ""
+  show (c :- (a, x)) = show c ++ show a ++ " := " ++ show x ++ "\n"
 
 getLevel :: RTypeTerm -> Error Int
 getLevel (Tp (RType n)) = return n
@@ -47,8 +49,12 @@ getPi :: RTypeTerm -> Error (RTypeTerm, Closure)
 getPi (Tp (RPi a b)) = return (a, b)
 getPi _ = fail "Function expected"
 
+toList :: Ctx -> [(RTypeTerm, RTerm)]
+toList EmptyCtx = []
+toList (c :- x) = x : toList c
+
 env :: Ctx -> Env
-env (Ctx c) = map snd c
+env c = map snd $ toList c
 
 getVar :: [a] -> Int -> Error a
 getVar [] _ = fail "Variable index out of range"
@@ -57,13 +63,13 @@ getVar (_ : c) n | n > 0 = getVar c (n - 1)
                  | otherwise = fail "Negative variable index"
 
 getType :: Ctx -> Int -> Error RTypeTerm
-getType (Ctx c) n = fst <$> getVar c n
+getType c n = fst <$> getVar (toList c) n
 
 addDef :: Term -> Term -> StateT Ctx Error ()
 addDef a x = do
-  (Ctx c) <- get
-  d <- lift $ checkDef (Ctx c)
-  put $ Ctx (d : c)
+  c <- get
+  d <- lift $ checkDef c
+  put (c :- d)
   where
     checkDef :: Ctx -> Error (RTypeTerm, RTerm)
     checkDef c = do
@@ -74,10 +80,10 @@ addDef a x = do
       return (a', x')
 
 newVar :: String -> RTypeTerm -> Ctx -> RTerm
-newVar s a (Ctx c) = RIrreducible (IVar s (length c)) a
+newVar s a c = RIrreducible (IVar s (length (toList c))) a
 
 pushVar :: String -> RTypeTerm -> Ctx -> Ctx
-pushVar s a (Ctx c) = Ctx ((a, newVar s a (Ctx c)) : c)
+pushVar s a c = c :- (a, newVar s a c)
 
 typecheck :: Ctx -> RTypeTerm -> Term -> Error ()
 typecheck c a (Var _ n) = do
@@ -167,12 +173,12 @@ reduceApp _ _ = fail "Function expected"
 
 unify :: Ctx -> RTypeTerm -> RTerm -> RTerm -> Error ()
 unify c (Tp (RType _)) a b = unifyType c (Tp a) (Tp b)
-unify (Ctx c) (Tp (RPi a (s, b, e))) f g = do
-  let v = newVar s a (Ctx c)
+unify c (Tp (RPi a (s, b, e))) f g = do
+  let v = newVar s a c
   x <- reduceApp f v
   y <- reduceApp g v
   b' <- Tp <$> reduce (v : e) b
-  unify (Ctx ((a, v) : c)) b' x y
+  unify (c :- (a, v)) b' x y
 unify c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
 unify _ _ _ _ = fail "Cannot unify"
 

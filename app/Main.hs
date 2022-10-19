@@ -7,7 +7,7 @@ import Term
 
 main :: IO ()
 main = do
-  putStrLn . show $ execStateT test (Ctx [])
+  putStrLn . show $ execStateT test EmptyCtx
 
 test :: StateT Ctx Error ()
 test = do
