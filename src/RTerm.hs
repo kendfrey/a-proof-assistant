@@ -66,7 +66,7 @@ getType :: Ctx -> Int -> Error RTypeTerm
 getType c n = fst <$> getVar (toList c) n
 
 addDef :: Term -> Term -> StateT Ctx Error ()
-addDef a x = do
+addDef a x = mapStateT (trace ("\nAdding a definition with type " ++ show a ++ " and value " ++ show x)) $ do
   c <- get
   d <- lift $ checkDef c
   put (c :- d)
@@ -86,44 +86,48 @@ pushVar :: String -> RTypeTerm -> Ctx -> Ctx
 pushVar s a c = c :- (a, newVar s a c)
 
 typecheck :: Ctx -> RTypeTerm -> Term -> Error ()
-typecheck c a (Var _ n) = do
-  a' <- getType c n
-  unifyType c a a'
-typecheck c a (App f x) = do
-  a'' <- infer c f
-  (a', (_, b, e)) <- getPi a''
-  typecheck c a' x
-  x' <- reduce (env c) x
-  b' <- Tp <$> reduce (x' : e) b
-  unifyType c a b'
-typecheck c (Tp (RType n)) x = do
-  m <- typecheckType c x
-  if m == n then
-    return ()
-  else
-    fail "Wrong universe level"
-typecheck c (Tp (RPi a (s, b, e))) x = typecheckPi c a s b e x
-typecheck _ (Tp (RIrreducible _ _)) _ = fail "Cannot typecheck against an irreducible type"
-typecheck _ _ _ = fail "Cannot typecheck"
+typecheck _c _a _x = trace ("\nTypechecking " ++ show _x ++ " as " ++ show _a) $ typecheck' _c _a _x
+  where
+  typecheck' c a (Var _ n) = do
+    a' <- getType c n
+    unifyType c a a'
+  typecheck' c a (App f x) = do
+    a'' <- infer c f
+    (a', (_, b, e)) <- getPi a''
+    typecheck c a' x
+    x' <- reduce (env c) x
+    b' <- Tp <$> reduce (x' : e) b
+    unifyType c a b'
+  typecheck' c (Tp (RType n)) x = do
+    m <- typecheckType c x
+    if m == n then
+      return ()
+    else
+      fail "Wrong universe level"
+  typecheck' c (Tp (RPi a (s, b, e))) x = typecheckPi c a s b e x
+  typecheck' _ (Tp (RIrreducible _ _)) _ = fail "Cannot typecheck against an irreducible type"
+  typecheck' _ _ _ = fail "Cannot typecheck"
 
 typecheckType :: Ctx -> Term -> Error Int
-typecheckType c (Var _ n) = do
-  a <- getType c n
-  getLevel a
-typecheckType _ (Type n) = return $ n + 1
-typecheckType c (Pi s a b) = do
-  n <- typecheckType c a
-  a' <- Tp <$> reduce (env c) a
-  m <- typecheckType (pushVar s a' c) b
-  return $ max n m
-typecheckType c (App f x) = do
-  a' <- infer c f
-  (a, (_, b, e)) <- getPi a'
-  typecheck c a x
-  x' <- reduce (env c) x
-  b' <- Tp <$> reduce (x' : e) b
-  getLevel b'
-typecheckType _ _ = fail "Type expected"
+typecheckType _c _a = trace ("\nTypechecking " ++ show _a ++ " as a type") $ typecheckType' _c _a
+  where
+  typecheckType' c (Var _ n) = do
+    a <- getType c n
+    getLevel a
+  typecheckType' _ (Type n) = return $ n + 1
+  typecheckType' c (Pi s a b) = do
+    n <- typecheckType c a
+    a' <- Tp <$> reduce (env c) a
+    m <- typecheckType (pushVar s a' c) b
+    return $ max n m
+  typecheckType' c (App f x) = do
+    a' <- infer c f
+    (a, (_, b, e)) <- getPi a'
+    typecheck c a x
+    x' <- reduce (env c) x
+    b' <- Tp <$> reduce (x' : e) b
+    getLevel b'
+  typecheckType' _ _ = fail "Type expected"
 
 typecheckPi :: Ctx -> RTypeTerm -> String -> Term -> Env -> Term -> Error ()
 typecheckPi c a s b e (Lam s' x) = do
@@ -172,26 +176,30 @@ reduceApp (RLam (_, f, e)) x = reduce (x : e) f
 reduceApp _ _ = fail "Function expected"
 
 unify :: Ctx -> RTypeTerm -> RTerm -> RTerm -> Error ()
-unify c (Tp (RType _)) a b = unifyType c (Tp a) (Tp b)
-unify c (Tp (RPi a (s, b, e))) f g = do
-  let v = newVar s a c
-  x <- reduceApp f v
-  y <- reduceApp g v
-  b' <- Tp <$> reduce (v : e) b
-  unify (c :- (a, v)) b' x y
-unify c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
-unify _ _ _ _ = fail "Cannot unify"
+unify _c _a _x _y = trace ("\nUnifying " ++ show _x ++ " and " ++ show _y) $ unify' _c _a _x _y
+  where
+  unify' c (Tp (RType _)) a b = unifyType c (Tp a) (Tp b)
+  unify' c (Tp (RPi a (s, b, e))) f g = do
+    let v = newVar s a c
+    x <- reduceApp f v
+    y <- reduceApp g v
+    b' <- Tp <$> reduce (v : e) b
+    unify (c :- (a, v)) b' x y
+  unify' c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
+  unify' _ _ _ _ = fail "Cannot unify"
 
 unifyType :: Ctx -> RTypeTerm -> RTypeTerm -> Error ()
-unifyType c (Tp (RIrreducible x _)) (Tp (RIrreducible y _)) = unifyIrreducible c x y
-unifyType _ (Tp (RType n)) (Tp (RType m)) | n == m = return ()
-                                          | otherwise = fail "Wrong universe level"
-unifyType c (Tp (RPi a (s, b, e))) (Tp (RPi a' (s', b', e'))) = do
-  unifyType c a a'
-  b'' <- Tp <$> reduce (newVar s a c : e) b
-  b''' <- Tp <$> reduce (newVar s' a c : e') b'
-  unifyType c b'' b'''
-unifyType _ _ _ = fail "Cannot unify types"
+unifyType _c _a _b = trace ("\nUnifying " ++ show _a ++ " and " ++ show _b) $ unifyType' _c _a _b
+  where
+  unifyType' c (Tp (RIrreducible x _)) (Tp (RIrreducible y _)) = unifyIrreducible c x y
+  unifyType' _ (Tp (RType n)) (Tp (RType m)) | n == m = return ()
+                                            | otherwise = fail "Wrong universe level"
+  unifyType' c (Tp (RPi a (s, b, e))) (Tp (RPi a' (s', b', e'))) = do
+    unifyType c a a'
+    b'' <- Tp <$> reduce (newVar s a c : e) b
+    b''' <- Tp <$> reduce (newVar s' a c : e') b'
+    unifyType c b'' b'''
+  unifyType' _ _ _ = fail "Cannot unify types"
 
 unifyIrreducible :: Ctx -> Irreducible -> Irreducible -> Error ()
 unifyIrreducible _ (IVar _ x) (IVar _ y) | x == y = return ()
