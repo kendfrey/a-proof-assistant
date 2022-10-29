@@ -11,9 +11,9 @@ elaborate :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
 elaborate _c _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " ++ show _a)) $ elaborate' _c _a _x
   where
   elaborate' :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
-  elaborate' c a (Var s n) = do
-    a' <- getType c n
-    unifyType c a a'
+  elaborate' c a (Var s) = do
+    (d, n) <- lookupVar c s
+    unifyType c a (defType d)
     return $ TVar s n
   elaborate' c a Hole = do
     n <- looks length
@@ -41,9 +41,9 @@ elaborateType :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, Int)
 elaborateType _c _a = trace ("\nElaborating " ++ show _a ++ " as a type") $ elaborateType' _c _a
   where
   elaborateType' :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, Int)
-  elaborateType' c (Var s n) = do
-    a <- getType c n
-    m <- getLevel a
+  elaborateType' c (Var s) = do
+    (d, n) <- lookupVar c s
+    m <- getLevel (defType d)
     return (TVar s n, m)
   elaborateType' _ (Type n) = return (TType n, n + 1)
   elaborateType' c (Pi s a b) = do
@@ -70,9 +70,9 @@ elaboratePi _ _ _ _ _ (App _ _) = fail "Unreachable code"
 elaboratePi _ _ _ _ _ _ = fail "Function expected"
 
 infer :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, RTypeTerm)
-infer c (Var s n) = do
-  a <- getType c n
-  return (TVar s n, a)
+infer c (Var s) = do
+  (d, n) <- lookupVar c s
+  return (TVar s n, defType d)
 infer _ Hole = fail "Cannot infer the type of a hole"
 infer _ (Type n) = return (TType n, Tp (RType (n + 1)))
 infer c (Pi s a b) = do
