@@ -25,8 +25,7 @@ source-repository head
 library
   exposed-modules:
       Error
-      RTerm
-      Term
+      Syntax
   other-modules:
       Paths_a_proof_assistant
   hs-source-dirs:
@@ -34,7 +33,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Werror
   build-depends:
       base >=4.7 && <5
-    , mtl
+    , transformers
   default-language: Haskell2010
 
 executable a-proof-assistant-exe
@@ -47,7 +46,7 @@ executable a-proof-assistant-exe
   build-depends:
       a-proof-assistant
     , base >=4.7 && <5
-    , mtl
+    , transformers
   default-language: Haskell2010
 
 test-suite a-proof-assistant-test
@@ -61,5 +60,5 @@ test-suite a-proof-assistant-test
   build-depends:
       a-proof-assistant
     , base >=4.7 && <5
-    , mtl
+    , transformers
   default-language: Haskell2010
