@@ -3,8 +3,8 @@ module Main (main) where
 import Control.Monad.Trans.Accum
 import Control.Monad.Trans.State
 import Data.List (intercalate)
+import Def
 import Error
-import Syntax
 
 main :: IO ()
 main = do

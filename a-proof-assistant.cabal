@@ -24,8 +24,13 @@ source-repository head
 
 library
   exposed-modules:
+      Def
+      Elaborate
       Error
+      Goal
+      Reduce
       Syntax
+      Unify
   other-modules:
       Paths_a_proof_assistant
   hs-source-dirs:
