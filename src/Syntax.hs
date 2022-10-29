@@ -12,8 +12,8 @@ module Syntax (
   env,
   getLevel,
   getPi,
-  getType,
   getVar,
+  lookupVar,
   newVar,
   pushVar
   ) where
@@ -21,7 +21,7 @@ module Syntax (
 import Data.List (intercalate)
 
 data Preterm
-  = Var String Int
+  = Var String
   | Hole
   | Type Int
   | Pi String Preterm Preterm
@@ -29,7 +29,7 @@ data Preterm
   | App Preterm Preterm
 
 instance Show Preterm where
-  show (Var s _) = s
+  show (Var s) = s
   show Hole = "?"
   show (Type n) = "Type" ++ show n
   show (Pi s a b) = "(" ++ s ++ " : " ++ show a ++ ") -> " ++ show b
@@ -113,8 +113,13 @@ getVar (x : _) 0 = return x
 getVar (_ : c) n | n > 0 = getVar c (n - 1)
                  | otherwise = fail "Negative variable index"
 
-getType :: MonadFail m => Ctx -> Int -> m RTypeTerm
-getType c n = defType <$> getVar (defs c) n
+lookupVar :: MonadFail m => Ctx -> String -> m (Def, Int)
+lookupVar c s = lookupVar' (defs c) 0
+  where
+  lookupVar' :: MonadFail m => [Def] -> Int -> m (Def, Int)
+  lookupVar' [] _ = fail ("Variable " ++ s ++ " is not defined")
+  lookupVar' (d : ds) n | defName d == s = return (d, n)
+                        | otherwise = lookupVar' ds (n + 1)
 
 newVar :: String -> RTypeTerm -> Ctx -> RTerm
 newVar s a c = RIrreducible (IVar s (length (defs c))) a
