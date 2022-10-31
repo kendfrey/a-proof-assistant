@@ -1,5 +1,6 @@
 module Syntax (
   Preterm(..),
+  Quotable(..),
   Term(..),
   Env,
   Closure,
@@ -28,13 +29,30 @@ data Preterm
   | Lam String Preterm
   | App Preterm Preterm
 
+data Precedence
+  = PZero
+  | PApp
+  | PPi
+  | PLam
+  deriving (Eq, Ord, Bounded, Enum)
+
 instance Show Preterm where
-  show (Var s) = s
-  show Hole = "?"
-  show (Type n) = "Type" ++ show n
-  show (Pi s a b) = "(" ++ s ++ " : " ++ show a ++ ") -> " ++ show b
-  show (Lam s x) = "(\\" ++ s ++ ", " ++ show x ++ ")"
-  show (App f x) = "(" ++ show f ++ " " ++ show x ++ ")"
+  show = showPreterm maxBound
+    where
+    showPreterm :: Precedence -> Preterm -> String
+    showPreterm _ (Var s) = s
+    showPreterm _ Hole = "?"
+    showPreterm _ (Type n) = "Type" ++ show n
+    showPreterm p (Pi "_" a b) = parens p PPi $ showPreterm (pred PPi) a ++ " -> " ++ showPreterm PPi b
+    showPreterm p (Pi s a b) = parens p PPi $ "(" ++ s ++ " : " ++ showPreterm maxBound a ++ ") -> " ++ showPreterm PPi b
+    showPreterm p (Lam s x) = parens p PLam $ s ++ " => " ++ showPreterm PLam x
+    showPreterm p (App f x) = parens p PApp $ showPreterm PApp f ++ " " ++ showPreterm (pred PApp) x
+    parens :: Precedence -> Precedence -> String -> String
+    parens p pmin s | p >= pmin = s
+                    | otherwise = "(" ++ s ++ ")"
+
+class Quotable a where
+  quote :: a -> Preterm
 
 data Term
   = TVar String Int
@@ -44,13 +62,13 @@ data Term
   | TLam String Term
   | TApp Term Term
 
-instance Show Term where
-  show (TVar s _) = s
-  show (THole n _) = "?" ++ show n
-  show (TType n) = "Type" ++ show n
-  show (TPi s a b) = "(" ++ s ++ " : " ++ show a ++ ") -> " ++ show b
-  show (TLam s x) = "(\\" ++ s ++ ", " ++ show x ++ ")"
-  show (TApp f x) = "(" ++ show f ++ " " ++ show x ++ ")"
+instance Quotable Term where
+  quote (TVar s _) = Var s
+  quote (THole _ _) = Hole
+  quote (TType n) = Type n
+  quote (TPi s a b) = Pi s (quote a) (quote b)
+  quote (TLam s x) = Lam s (quote x)
+  quote (TApp f x) = App (quote f) (quote x)
 
 type Env = [RTerm]
 
@@ -62,26 +80,26 @@ data RTerm
   | RPi RTypeTerm Closure
   | RLam Closure
 
-instance Show RTerm where
-  show (RIrreducible x _) = show x
-  show (RType n) = "Type" ++ show n
-  show (RPi a (s, b, _)) = "(" ++ s ++ " : " ++ show a ++ ") -> " ++ show b
-  show (RLam (s, x, _)) = "(\\" ++ s ++ ", " ++ show x ++ ")"
+instance Quotable RTerm where
+  quote (RIrreducible x _) = quote x
+  quote (RType n) = Type n
+  quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
+  quote (RLam (s, x, _)) = Lam s (quote x)
 
 data Irreducible
   = IVar String Int
   | IMVar Int
   | IApp Irreducible RTerm RTypeTerm
 
-instance Show Irreducible where
-  show (IVar s _) = s
-  show (IMVar n) = "?" ++ show n
-  show (IApp f x _) = "(" ++ show f ++ " " ++ show x ++ ")"
+instance Quotable Irreducible where
+  quote (IVar s _) = Var s
+  quote (IMVar _) = Hole
+  quote (IApp f x _) = App (quote f) (quote x)
 
 newtype RTypeTerm = Tp RTerm
 
-instance Show RTypeTerm where
-  show (Tp x) = show x
+instance Quotable RTypeTerm where
+  quote (Tp x) = quote x
 
 getLevel :: MonadFail m => RTypeTerm -> m Int
 getLevel (Tp (RType n)) = return n
@@ -99,7 +117,7 @@ instance Show Ctx where
   show c = intercalate "\n" . map showDef . reverse $ defs c
     where
     showDef :: Def -> String
-    showDef d = defName d ++ " : " ++ show (defType d) ++ " := " ++ show (defVal d)
+    showDef d = defName d ++ " : " ++ show (quote (defType d)) ++ " := " ++ show (quote (defVal d))
 
 (|-) :: Ctx -> Def -> Ctx
 (Ctx ds) |- x = Ctx (x : ds)
