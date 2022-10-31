@@ -8,7 +8,7 @@ import Syntax
 import Unify
 
 elaborate :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
-elaborate _c _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " ++ show _a)) $ elaborate' _c _a _x
+elaborate _c _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " ++ show (quote _a))) $ elaborate' _c _a _x
   where
   elaborate' :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
   elaborate' c a (Var s) = do

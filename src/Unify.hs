@@ -5,7 +5,7 @@ import Reduce
 import Syntax
 
 unify :: MonadTrace m => Ctx -> RTypeTerm -> RTerm -> RTerm -> m ()
-unify _c _a _x _y = trace ("\nUnifying " ++ show _x ++ " and " ++ show _y) $ unify' _c _a _x _y
+unify _c _a _x _y = trace ("\nUnifying " ++ show (quote _x) ++ " and " ++ show (quote _y)) $ unify' _c _a _x _y
   where
   unify' c (Tp (RType _)) a b = unifyType c (Tp a) (Tp b)
   unify' c (Tp (RPi a (s, b, e))) f g = do
@@ -18,7 +18,7 @@ unify _c _a _x _y = trace ("\nUnifying " ++ show _x ++ " and " ++ show _y) $ uni
   unify' _ _ _ _ = fail "Cannot unify"
 
 unifyType :: MonadTrace m => Ctx -> RTypeTerm -> RTypeTerm -> m ()
-unifyType _c _a _b = trace ("\nUnifying " ++ show _a ++ " and " ++ show _b) $ unifyType' _c _a _b
+unifyType _c _a _b = trace ("\nUnifying " ++ show (quote _a) ++ " and " ++ show (quote _b)) $ unifyType' _c _a _b
   where
   unifyType' c (Tp (RIrreducible x _)) (Tp (RIrreducible y _)) = unifyIrreducible c x y
   unifyType' _ (Tp (RType n)) (Tp (RType m)) | n == m = return ()
