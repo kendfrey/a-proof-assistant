@@ -8,16 +8,16 @@ import Error
 import Reduce
 import Syntax
 
-addDef :: String -> Preterm -> Preterm -> StateT Ctx (AccumT [Goal] Error) ()
-addDef s a x = mapStateT (mapAccumT (trace ("\nAdding a definition with type " ++ show a ++ " and value " ++ show x))) $ do
+addDef :: String -> [String] -> Preterm -> Preterm -> StateT Ctx (AccumT [Goal] Error) ()
+addDef s u a x = mapStateT (mapAccumT (trace ("\nAdding a definition '" ++ s ++ "' with type " ++ show a ++ " and value " ++ show x))) $ do
   c <- get
   d <- lift $ checkDef c
   put (c |- d)
   where
     checkDef :: Ctx -> AccumT [Goal] Error Def
     checkDef c = do
-      (a', _) <- elaborateType c a
+      (a', _) <- elaborateType c u a
       a'' <- lift $ Tp <$> reduce (env c) a'
-      x' <- elaborate c a'' x
+      x' <- elaborate c u a'' x
       x'' <- lift $ reduce (env c) x'
-      return $ Def s a'' x'' False
+      return $ Def s a'' x'' (Just (TLDef (length u)))

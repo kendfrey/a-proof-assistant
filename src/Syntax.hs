@@ -1,5 +1,9 @@
 module Syntax (
+  module Level,
   Preterm(..),
+  var,
+  fun,
+  lam,
   Quotable(..),
   Term(..),
   Env,
@@ -7,6 +11,7 @@ module Syntax (
   RTerm(..),
   Irreducible(..),
   RTypeTerm(..),
+  TopLevelDef(..),
   Def(..),
   Ctx(..),
   (|-),
@@ -16,18 +21,30 @@ module Syntax (
   getVar,
   lookupVar,
   newVar,
-  pushVar
+  pushVar,
+  substLevels
   ) where
 
 import Data.List (intercalate)
+import Data.Map (empty, foldrWithKey)
+import Level
 
 data Preterm
-  = Var String
+  = Var String [Level]
   | Hole
-  | Type Int
+  | Type Level
   | Pi String Preterm Preterm
   | Lam String Preterm
   | App Preterm Preterm
+
+var :: String -> Preterm
+var s = Var s []
+
+fun :: Preterm -> Preterm -> Preterm
+fun a b = Pi "_" a b
+
+lam :: Preterm -> Preterm
+lam x = Lam "_" x
 
 data Precedence
   = PZero
@@ -40,9 +57,10 @@ instance Show Preterm where
   show = showPreterm maxBound
     where
     showPreterm :: Precedence -> Preterm -> String
-    showPreterm _ (Var s) = s
+    showPreterm _ (Var s []) = s
+    showPreterm _ (Var s u) = s ++ "[" ++ intercalate ", " (map show u) ++ "]"
     showPreterm _ Hole = "?"
-    showPreterm _ (Type n) = "Type" ++ show n
+    showPreterm _ (Type n) = "Type[" ++ show n ++ "]"
     showPreterm p (Pi "_" a b) = parens p PPi $ showPreterm (pred PPi) a ++ " -> " ++ showPreterm PPi b
     showPreterm p (Pi s a b) = parens p PPi $ "(" ++ s ++ " : " ++ showPreterm maxBound a ++ ") -> " ++ showPreterm PPi b
     showPreterm p (Lam s x) = parens p PLam $ s ++ " => " ++ showPreterm PLam x
@@ -55,53 +73,53 @@ class Quotable a where
   quote :: a -> Preterm
 
 data Term
-  = TVar String Int
+  = TVar String [RLevel] Int
   | THole Int RTypeTerm
-  | TType Int
+  | TType RLevel
   | TPi String Term Term
   | TLam String Term
   | TApp Term Term
 
 instance Quotable Term where
-  quote (TVar s _) = Var s
+  quote (TVar s u _) = Var s (map quoteLevel u)
   quote (THole _ _) = Hole
-  quote (TType n) = Type n
+  quote (TType n) = Type (quoteLevel n)
   quote (TPi s a b) = Pi s (quote a) (quote b)
   quote (TLam s x) = Lam s (quote x)
   quote (TApp f x) = App (quote f) (quote x)
 
-type Env = [RTerm]
+type Env = [(RTerm, Maybe Int)]
 
 type Closure = (String, Term, Env)
 
 data RTerm
   = RIrreducible Irreducible RTypeTerm
-  | RType Int
+  | RType RLevel
   | RPi RTypeTerm Closure
   | RLam Closure
 
 instance Quotable RTerm where
   quote (RIrreducible x _) = quote x
-  quote (RType n) = Type n
+  quote (RType n) = Type (quoteLevel n)
   quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
   quote (RLam (s, x, _)) = Lam s (quote x)
 
 data Irreducible
-  = IVar String Int
+  = IVar String [RLevel] Int
   | IMVar Int
   | IApp Irreducible RTerm RTypeTerm
 
 instance Quotable Irreducible where
-  quote (IVar s _) = Var s
+  quote (IVar s u _) = Var s (map quoteLevel u)
   quote (IMVar _) = Hole
   quote (IApp f x _) = App (quote f) (quote x)
 
-newtype RTypeTerm = Tp RTerm
+newtype RTypeTerm = Tp { tpTerm :: RTerm }
 
 instance Quotable RTypeTerm where
   quote (Tp x) = quote x
 
-getLevel :: MonadFail m => RTypeTerm -> m Int
+getLevel :: MonadFail m => RTypeTerm -> m RLevel
 getLevel (Tp (RType n)) = return n
 getLevel _ = fail "Type expected"
 
@@ -109,7 +127,9 @@ getPi :: MonadFail m => RTypeTerm -> m (RTypeTerm, Closure)
 getPi (Tp (RPi a b)) = return (a, b)
 getPi _ = fail "Function expected"
 
-data Def = Def { defName :: String, defType :: RTypeTerm, defVal :: RTerm, defBound :: Bool }
+data TopLevelDef = TLDef { universeVars :: Int }
+
+data Def = Def { defName :: String, defType :: RTypeTerm, defVal :: RTerm, defTopLevel :: Maybe TopLevelDef }
 
 newtype Ctx = Ctx { defs :: [Def] }
 
@@ -123,7 +143,10 @@ instance Show Ctx where
 (Ctx ds) |- x = Ctx (x : ds)
 
 env :: Ctx -> Env
-env c = map defVal $ defs c
+env c = map envVar $ defs c
+  where
+  envVar :: Def -> (RTerm, Maybe Int)
+  envVar d = (defVal d, universeVars <$> defTopLevel d)
 
 getVar :: MonadFail m => [a] -> Int -> m a
 getVar [] _ = fail "Variable index out of range"
@@ -140,7 +163,34 @@ lookupVar c s = lookupVar' (defs c) 0
                         | otherwise = lookupVar' ds (n + 1)
 
 newVar :: String -> RTypeTerm -> Ctx -> RTerm
-newVar s a c = RIrreducible (IVar s (length (defs c))) a
+newVar s a c = RIrreducible (IVar s [] (length (defs c))) a
 
 pushVar :: String -> RTypeTerm -> Ctx -> Ctx
-pushVar s a c = c |- Def s a (newVar s a c) True
+pushVar s a c = c |- Def s a (newVar s a c) Nothing
+
+substLevels :: MonadFail m => [RLevel] -> RTerm -> Int -> m RTerm
+substLevels [] x 0 = return x
+substLevels u _x _n | length u == _n = return $ substLevelsRT _x
+                    | otherwise = fail "Wrong number of levels"
+  where
+  substLevelsRT :: RTerm -> RTerm
+  substLevelsRT (RIrreducible x (Tp a)) = RIrreducible (substLevelsIrr x) (Tp (substLevelsRT a))
+  substLevelsRT (RType n) = RType (subst n)
+  substLevelsRT (RPi (Tp a) (s, b, e)) = RPi (Tp (substLevelsRT a)) (s, substLevelsT b, map substLevelsEnv e)
+  substLevelsRT (RLam (s, x, e)) = RLam (s, substLevelsT x, map substLevelsEnv e)
+  substLevelsIrr :: Irreducible -> Irreducible
+  substLevelsIrr (IVar s v n) = IVar s (map subst v) n
+  substLevelsIrr (IMVar n) = IMVar n
+  substLevelsIrr (IApp f x (Tp a)) = IApp (substLevelsIrr f) (substLevelsRT x) (Tp (substLevelsRT a))
+  substLevelsT :: Term -> Term
+  substLevelsT (TVar s v n) = TVar s (map subst v) n
+  substLevelsT (THole n (Tp a)) = THole n (Tp (substLevelsRT a))
+  substLevelsT (TType n) = TType (subst n)
+  substLevelsT (TPi s a b) = TPi s (substLevelsT a) (substLevelsT b)
+  substLevelsT (TLam s x) = TLam s (substLevelsT x)
+  substLevelsT (TApp f x) = TApp (substLevelsT f) (substLevelsT x)
+  substLevelsEnv :: (RTerm, Maybe Int) -> (RTerm, Maybe Int)
+  substLevelsEnv (x, Nothing) = (substLevelsRT x, Nothing)
+  substLevelsEnv x = x
+  subst :: RLevel -> RLevel
+  subst (RLevel n m) = foldrWithKey (\n' (m', _) l -> rlMax (rlPlus (u !! n') m') l) (RLevel n empty) m

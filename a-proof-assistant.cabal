@@ -28,6 +28,7 @@ library
       Elaborate
       Error
       Goal
+      Level
       Reduce
       Syntax
       Unify
@@ -38,6 +39,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Werror
   build-depends:
       base >=4.7 && <5
+    , containers
     , transformers
   default-language: Haskell2010
 
@@ -51,6 +53,7 @@ executable a-proof-assistant-exe
   build-depends:
       a-proof-assistant
     , base >=4.7 && <5
+    , containers
     , transformers
   default-language: Haskell2010
 
@@ -65,5 +68,6 @@ test-suite a-proof-assistant-test
   build-depends:
       a-proof-assistant
     , base >=4.7 && <5
+    , containers
     , transformers
   default-language: Haskell2010

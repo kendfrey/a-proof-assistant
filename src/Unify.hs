@@ -12,8 +12,8 @@ unify _c _a _x _y = trace ("\nUnifying " ++ show (quote _x) ++ " and " ++ show (
     let v = newVar s a c
     x <- reduceApp f v
     y <- reduceApp g v
-    b' <- Tp <$> reduce (v : e) b
-    unify (c |- Def s a v True) b' x y
+    b' <- Tp <$> reduce ((v, Nothing) : e) b
+    unify (c |- Def s a v Nothing) b' x y
   unify' c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
   unify' _ _ _ _ = fail "Cannot unify"
 
@@ -25,14 +25,15 @@ unifyType _c _a _b = trace ("\nUnifying " ++ show (quote _a) ++ " and " ++ show 
                                             | otherwise = fail "Wrong universe level"
   unifyType' c (Tp (RPi a (s, b, e))) (Tp (RPi a' (s', b', e'))) = do
     unifyType c a a'
-    b'' <- Tp <$> reduce (newVar s a c : e) b
-    b''' <- Tp <$> reduce (newVar s' a c : e') b'
+    b'' <- Tp <$> reduce ((newVar s a c, Nothing) : e) b
+    b''' <- Tp <$> reduce ((newVar s' a c, Nothing) : e') b'
     unifyType c b'' b'''
   unifyType' _ _ _ = fail "Cannot unify types"
 
 unifyIrreducible :: MonadTrace m => Ctx -> Irreducible -> Irreducible -> m ()
-unifyIrreducible _ (IVar _ x) (IVar _ y) | x == y = return ()
-                                         | otherwise = fail "Variables are not equal"
+unifyIrreducible _ (IVar _ u x) (IVar _ v y) | u /= v = fail "Variable level indices are not equal"
+                                             | x == y = return ()
+                                             | otherwise = fail "Variables are not equal"
 unifyIrreducible _ (IMVar x) (IMVar y) | x == y = return ()
                                        | otherwise = fail "Metavariables are not equal"
 unifyIrreducible c (IApp f x a) (IApp g y b) = do

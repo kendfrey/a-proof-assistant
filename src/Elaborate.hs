@@ -1,91 +1,102 @@
 module Elaborate (module Goal, module Syntax, elaborate, elaborateType) where
 
 import Control.Monad.Trans.Accum
+import Data.Maybe
 import Error
 import Goal
 import Reduce
 import Syntax
 import Unify
 
-elaborate :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
-elaborate _c _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " ++ show (quote _a))) $ elaborate' _c _a _x
+elaborate :: MonadTrace m => Ctx -> [String] -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
+elaborate _c _u _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " ++ show (quote _a))) $ elaborate' _c _u _a _x
   where
-  elaborate' :: MonadTrace m => Ctx -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
-  elaborate' c a (Var s) = do
+  elaborate' :: MonadTrace m => Ctx -> [String] -> RTypeTerm -> Preterm -> AccumT [Goal] m Term
+  elaborate' c u a (Var s v) = do
     (d, n) <- lookupVar c s
-    unifyType c a (defType d)
-    return $ TVar s n
-  elaborate' c a Hole = do
+    v' <- mapM (reduceLevel u) v
+    a' <- substLevels v' (tpTerm (defType d)) (fromMaybe 0 (universeVars <$> defTopLevel d))
+    unifyType c a (Tp a')
+    return $ TVar s v' n
+  elaborate' c _ a Hole = do
     n <- looks length
     add [Goal n c a]
     return $ THole n a
-  elaborate' c a (App f x) = do
-    (f', a'') <- infer c f
+  elaborate' c u a (App f x) = do
+    (f', a'') <- infer c u f
     (a', (_, b, e)) <- getPi a''
-    x' <- elaborate c a' x
+    x' <- elaborate c u a' x
     x'' <- reduce (env c) x'
-    b' <- Tp <$> reduce (x'' : e) b
+    b' <- Tp <$> reduce ((x'', Nothing) : e) b
     unifyType c a b'
     return $ TApp f' x'
-  elaborate' c (Tp (RType n)) x = do
-    (x', m) <- elaborateType c x
+  elaborate' c u (Tp (RType n)) x = do
+    (x', m) <- elaborateType c u x
     if m == n then
       return x'
     else
       fail "Wrong universe level"
-  elaborate' c (Tp (RPi a (s, b, e))) x = elaboratePi c a s b e x
-  elaborate' _ (Tp (RIrreducible _ _)) _ = fail "Cannot elaborate as an irreducible type"
-  elaborate' _ _ _ = fail "Cannot elaborate"
+  elaborate' c u (Tp (RPi a (s, b, e))) x = elaboratePi c u a s b e x
+  elaborate' _ _ (Tp (RIrreducible _ _)) _ = fail "Cannot elaborate as an irreducible type"
+  elaborate' _ _ _ _ = fail "Cannot elaborate"
 
-elaborateType :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, Int)
-elaborateType _c _a = trace ("\nElaborating " ++ show _a ++ " as a type") $ elaborateType' _c _a
+elaborateType :: MonadTrace m => Ctx -> [String] -> Preterm -> AccumT [Goal] m (Term, RLevel)
+elaborateType _c _u _a = trace ("\nElaborating " ++ show _a ++ " as a type") $ elaborateType' _c _u _a
   where
-  elaborateType' :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, Int)
-  elaborateType' c (Var s) = do
+  elaborateType' :: MonadTrace m => Ctx -> [String] -> Preterm -> AccumT [Goal] m (Term, RLevel)
+  elaborateType' c u (Var s v) = do
     (d, n) <- lookupVar c s
-    m <- getLevel (defType d)
-    return (TVar s n, m)
-  elaborateType' _ (Type n) = return (TType n, n + 1)
-  elaborateType' c (Pi s a b) = do
-    (a', n) <- elaborateType c a
+    v' <- mapM (reduceLevel u) v
+    a <- substLevels v' (tpTerm (defType d)) (fromMaybe 0 (universeVars <$> defTopLevel d))
+    m <- getLevel (Tp a)
+    return (TVar s v' n, m)
+  elaborateType' _ u (Type n) = do
+    n' <- reduceLevel u n
+    return (TType n', rlPlus n' 1)
+  elaborateType' c u (Pi s a b) = do
+    (a', n) <- elaborateType c u a
     a'' <- Tp <$> reduce (env c) a'
-    (b', m) <- elaborateType (pushVar s a'' c) b
-    return (TPi s a' b', max n m)
-  elaborateType' c (App f x) = do
-    (f', a') <- infer c f
+    (b', m) <- elaborateType (pushVar s a'' c) u b
+    return (TPi s a' b', rlMax n m)
+  elaborateType' c u (App f x) = do
+    (f', a') <- infer c u f
     (a, (_, b, e)) <- getPi a'
-    x' <- elaborate c a x
+    x' <- elaborate c u a x
     x'' <- reduce (env c) x'
-    b' <- Tp <$> reduce (x'' : e) b
+    b' <- Tp <$> reduce ((x'', Nothing) : e) b
     n <- getLevel b'
     return (TApp f' x', n)
-  elaborateType' _ _ = fail "Type expected"
+  elaborateType' _ _ _ = fail "Type expected"
 
-elaboratePi :: MonadTrace m => Ctx -> RTypeTerm -> String -> Term -> Env -> Preterm -> AccumT [Goal] m Term
-elaboratePi c a s b e (Lam s' x) = do
-  b' <- Tp <$> reduce (newVar s a c : e) b
-  x' <- elaborate (pushVar s' a c) b' x
+elaboratePi :: MonadTrace m => Ctx -> [String] -> RTypeTerm -> String -> Term -> Env -> Preterm -> AccumT [Goal] m Term
+elaboratePi c u a s b e (Lam s' x) = do
+  b' <- Tp <$> reduce ((newVar s a c, Nothing) : e) b
+  x' <- elaborate (pushVar s' a c) u b' x
   return $ TLam s' x'
-elaboratePi _ _ _ _ _ (App _ _) = fail "Unreachable code"
-elaboratePi _ _ _ _ _ _ = fail "Function expected"
+elaboratePi _ _ _ _ _ _ (App _ _) = fail "Unreachable code"
+elaboratePi _ _ _ _ _ _ _ = fail "Function expected"
 
-infer :: MonadTrace m => Ctx -> Preterm -> AccumT [Goal] m (Term, RTypeTerm)
-infer c (Var s) = do
+infer :: MonadTrace m => Ctx -> [String] -> Preterm -> AccumT [Goal] m (Term, RTypeTerm)
+infer c u (Var s v) = do
   (d, n) <- lookupVar c s
-  return (TVar s n, defType d)
-infer _ Hole = fail "Cannot infer the type of a hole"
-infer _ (Type n) = return (TType n, Tp (RType (n + 1)))
-infer c (Pi s a b) = do
-  (a', a'') <- infer c a
+  v' <- mapM (reduceLevel u) v
+  a <- substLevels v' (tpTerm (defType d)) (fromMaybe 0 (universeVars <$> defTopLevel d))
+  return (TVar s v' n, Tp a)
+infer _ _ Hole = fail "Cannot infer the type of a hole"
+infer _ u (Type n) = do
+  n' <- reduceLevel u n
+  return (TType n', Tp (RType (rlPlus n' 1)))
+infer c u (Pi s a b) = do
+  (a', a'') <- infer c u a
   n <- getLevel a''
-  (b', b'') <- infer (pushVar s a'' c) b
+  (b', b'') <- infer (pushVar s a'' c) u b
   m <- getLevel b''
-  return (TPi s a' b', Tp (RType (max n m)))
-infer _ (Lam _ _) = fail "Cannot infer the type of a lambda"
-infer c (App f x) = do
-  (f', a') <- infer c f
+  return (TPi s a' b', Tp (RType (rlMax n m)))
+infer _ _ (Lam _ _) = fail "Cannot infer the type of a lambda"
+infer c u (App f x) = do
+  (f', a') <- infer c u f
   (a, (_, b, e)) <- getPi a'
-  x' <- elaborate c a x
+  x' <- elaborate c u a x
   x'' <- reduce (env c) x'
-  b' <- reduce (x'' : e) b
+  b' <- reduce ((x'', Nothing) : e) b
   return (TApp f' x', Tp b')
