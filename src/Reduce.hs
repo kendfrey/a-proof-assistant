@@ -9,7 +9,6 @@ reduce e (TVar _ u n) = do
   (x, v) <- getVar e n
   substLevels u x (fromMaybe 0 v)
 reduce _ (THole n a) = return $ RIrreducible (IMVar n) a
-reduce _ (TType n) = return $ RType n
 reduce e (TPi s a b) = do
   a' <- Tp <$> reduce e a
   return $ RPi a' (s, b, e)

@@ -50,9 +50,6 @@ elaborateType _c _u _a = trace ("\nElaborating " ++ show _a ++ " as a type") $ e
     a <- substLevels v' (tpTerm (defType d)) (fromMaybe 0 (universeVars <$> defTopLevel d))
     m <- getLevel (Tp a)
     return (TVar s v' n, m)
-  elaborateType' _ u (Type n) = do
-    n' <- reduceLevel u n
-    return (TType n', rlPlus n' 1)
   elaborateType' c u (Pi s a b) = do
     (a', n) <- elaborateType c u a
     a'' <- Tp <$> reduce (env c) a'
@@ -83,9 +80,6 @@ infer c u (Var s v) = do
   a <- substLevels v' (tpTerm (defType d)) (fromMaybe 0 (universeVars <$> defTopLevel d))
   return (TVar s v' n, Tp a)
 infer _ _ Hole = fail "Cannot infer the type of a hole"
-infer _ u (Type n) = do
-  n' <- reduceLevel u n
-  return (TType n', Tp (RType (rlPlus n' 1)))
 infer c u (Pi s a b) = do
   (a', a'') <- infer c u a
   n <- getLevel a''

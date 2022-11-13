@@ -32,7 +32,6 @@ import Level
 data Preterm
   = Var String [Level]
   | Hole
-  | Type Level
   | Pi String Preterm Preterm
   | Lam String Preterm
   | App Preterm Preterm
@@ -60,7 +59,6 @@ instance Show Preterm where
     showPreterm _ (Var s []) = s
     showPreterm _ (Var s u) = s ++ "[" ++ intercalate ", " (map show u) ++ "]"
     showPreterm _ Hole = "?"
-    showPreterm _ (Type n) = "Type[" ++ show n ++ "]"
     showPreterm p (Pi "_" a b) = parens p PPi $ showPreterm (pred PPi) a ++ " -> " ++ showPreterm PPi b
     showPreterm p (Pi s a b) = parens p PPi $ "(" ++ s ++ " : " ++ showPreterm maxBound a ++ ") -> " ++ showPreterm PPi b
     showPreterm p (Lam s x) = parens p PLam $ s ++ " => " ++ showPreterm PLam x
@@ -75,7 +73,6 @@ class Quotable a where
 data Term
   = TVar String [RLevel] Int
   | THole Int RTypeTerm
-  | TType RLevel
   | TPi String Term Term
   | TLam String Term
   | TApp Term Term
@@ -83,7 +80,6 @@ data Term
 instance Quotable Term where
   quote (TVar s u _) = Var s (map quoteLevel u)
   quote (THole _ _) = Hole
-  quote (TType n) = Type (quoteLevel n)
   quote (TPi s a b) = Pi s (quote a) (quote b)
   quote (TLam s x) = Lam s (quote x)
   quote (TApp f x) = App (quote f) (quote x)
@@ -100,7 +96,7 @@ data RTerm
 
 instance Quotable RTerm where
   quote (RIrreducible x _) = quote x
-  quote (RType n) = Type (quoteLevel n)
+  quote (RType n) = Var "Type" [(quoteLevel n)]
   quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
   quote (RLam (s, x, _)) = Lam s (quote x)
 
@@ -127,14 +123,14 @@ getPi :: MonadFail m => RTypeTerm -> m (RTypeTerm, Closure)
 getPi (Tp (RPi a b)) = return (a, b)
 getPi _ = fail "Function expected"
 
-data TopLevelDef = TLDef { universeVars :: Int }
+data TopLevelDef = TLDef { universeVars :: Int, isPrimitive :: Bool }
 
 data Def = Def { defName :: String, defType :: RTypeTerm, defVal :: RTerm, defTopLevel :: Maybe TopLevelDef }
 
 newtype Ctx = Ctx { defs :: [Def] }
 
 instance Show Ctx where
-  show c = intercalate "\n" . map showDef . reverse $ defs c
+  show c = intercalate "\n" . map showDef . filter (any (not . isPrimitive) . defTopLevel) . reverse $ defs c
     where
     showDef :: Def -> String
     showDef d = defName d ++ " : " ++ show (quote (defType d)) ++ " := " ++ show (quote (defVal d))
@@ -185,7 +181,6 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsT :: Term -> Term
   substLevelsT (TVar s v n) = TVar s (map subst v) n
   substLevelsT (THole n (Tp a)) = THole n (Tp (substLevelsRT a))
-  substLevelsT (TType n) = TType (subst n)
   substLevelsT (TPi s a b) = TPi s (substLevelsT a) (substLevelsT b)
   substLevelsT (TLam s x) = TLam s (substLevelsT x)
   substLevelsT (TApp f x) = TApp (substLevelsT f) (substLevelsT x)

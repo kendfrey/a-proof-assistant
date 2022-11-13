@@ -1,4 +1,4 @@
-module Level (Level(..), RLevel(..), quoteLevel, rlMax, rlPlus, reduceLevel) where
+module Level (Level(..), RLevel(..), quoteLevel, rlLevel, rlMax, rlPlus, rlVar, reduceLevel) where
 
 import Data.Map (Map, elems, empty, singleton, unionWith)
 import qualified Data.Map as M
@@ -18,6 +18,12 @@ instance Show Level where
 data RLevel = RLevel { rlMinInt :: Int, rlVars :: Map Int (Int, String) }
   deriving (Eq)
 
+rlLevel :: Int -> RLevel
+rlLevel n = RLevel n empty
+
+rlVar :: Int -> String -> RLevel
+rlVar n s = RLevel 0 (singleton n (0, s))
+
 rlPlus :: RLevel -> Int -> RLevel
 rlPlus (RLevel m vs) n = RLevel (m + n) (M.map (\(n', s) -> (n' + n, s)) vs)
 
@@ -32,10 +38,10 @@ lookupVar (u : us) v | u == v = return 0
                          return $ n + 1
 
 reduceLevel :: MonadFail m => [String] -> Level -> m RLevel
-reduceLevel _ (Level n) = return $ RLevel n empty
-reduceLevel u (LVar x) = do
-  n <- lookupVar u x
-  return $ RLevel 0 (singleton n (0, x))
+reduceLevel _ (Level n) = return $ rlLevel n
+reduceLevel u (LVar s) = do
+  n <- lookupVar u s
+  return $ rlVar n s
 reduceLevel u (LPlus l n) = do
   l' <- reduceLevel u l
   return $ rlPlus l' n
