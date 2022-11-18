@@ -1,5 +1,6 @@
 module Syntax (
   module Level,
+  module VarNames,
   Preterm(..),
   var,
   fun,
@@ -28,6 +29,7 @@ module Syntax (
 import Data.List (intercalate)
 import Data.Map (empty, foldrWithKey)
 import Level
+import VarNames
 
 data Preterm
   = Var String [Level]
@@ -73,16 +75,22 @@ class Quotable a where
 data Term
   = TVar String [RLevel] Int
   | THole Int RTypeTerm
+  | TType RLevel
   | TPi String Term Term
   | TLam String Term
   | TApp Term Term
+  | TEmpty
+  | TEmptyElim RLevel Term Term
 
 instance Quotable Term where
   quote (TVar s u _) = Var s (map quoteLevel u)
   quote (THole _ _) = Hole
+  quote (TType n) = Var vType [quoteLevel n]
   quote (TPi s a b) = Pi s (quote a) (quote b)
   quote (TLam s x) = Lam s (quote x)
   quote (TApp f x) = App (quote f) (quote x)
+  quote TEmpty = var vEmpty
+  quote (TEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
 
 type Env = [(RTerm, Maybe Int)]
 
@@ -93,22 +101,26 @@ data RTerm
   | RType RLevel
   | RPi RTypeTerm Closure
   | RLam Closure
+  | REmpty
 
 instance Quotable RTerm where
   quote (RIrreducible x _) = quote x
-  quote (RType n) = Var "Type" [(quoteLevel n)]
+  quote (RType n) = Var vType [quoteLevel n]
   quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
   quote (RLam (s, x, _)) = Lam s (quote x)
+  quote REmpty = var vEmpty
 
 data Irreducible
   = IVar String [RLevel] Int
   | IMVar Int
   | IApp Irreducible RTerm RTypeTerm
+  | IEmptyElim RLevel RTerm Irreducible
 
 instance Quotable Irreducible where
   quote (IVar s u _) = Var s (map quoteLevel u)
   quote (IMVar _) = Hole
   quote (IApp f x _) = App (quote f) (quote x)
+  quote (IEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
 
 newtype RTypeTerm = Tp { tpTerm :: RTerm }
 
@@ -174,16 +186,21 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsRT (RType n) = RType (subst n)
   substLevelsRT (RPi (Tp a) (s, b, e)) = RPi (Tp (substLevelsRT a)) (s, substLevelsT b, map substLevelsEnv e)
   substLevelsRT (RLam (s, x, e)) = RLam (s, substLevelsT x, map substLevelsEnv e)
+  substLevelsRT REmpty = REmpty
   substLevelsIrr :: Irreducible -> Irreducible
   substLevelsIrr (IVar s v n) = IVar s (map subst v) n
   substLevelsIrr (IMVar n) = IMVar n
   substLevelsIrr (IApp f x (Tp a)) = IApp (substLevelsIrr f) (substLevelsRT x) (Tp (substLevelsRT a))
+  substLevelsIrr (IEmptyElim v a x) = IEmptyElim (subst v) (substLevelsRT a) (substLevelsIrr x)
   substLevelsT :: Term -> Term
   substLevelsT (TVar s v n) = TVar s (map subst v) n
   substLevelsT (THole n (Tp a)) = THole n (Tp (substLevelsRT a))
+  substLevelsT (TType n) = TType (subst n)
   substLevelsT (TPi s a b) = TPi s (substLevelsT a) (substLevelsT b)
   substLevelsT (TLam s x) = TLam s (substLevelsT x)
   substLevelsT (TApp f x) = TApp (substLevelsT f) (substLevelsT x)
+  substLevelsT TEmpty = TEmpty
+  substLevelsT (TEmptyElim v a x) = TEmptyElim (subst v) (substLevelsT a) (substLevelsT x)
   substLevelsEnv :: (RTerm, Maybe Int) -> (RTerm, Maybe Int)
   substLevelsEnv (x, Nothing) = (substLevelsRT x, Nothing)
   substLevelsEnv x = x

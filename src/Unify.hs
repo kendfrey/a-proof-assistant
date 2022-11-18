@@ -14,6 +14,7 @@ unify _c _a _x _y = trace ("\nUnifying " ++ show (quote _x) ++ " and " ++ show (
     y <- reduceApp g v
     b' <- Tp <$> reduce ((v, Nothing) : e) b
     unify (c |- Def s a v Nothing) b' x y
+  unify' _ (Tp REmpty) _ _ = return ()
   unify' c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
   unify' _ _ _ _ = fail "Cannot unify"
 
@@ -28,6 +29,7 @@ unifyType _c _a _b = trace ("\nUnifying " ++ show (quote _a) ++ " and " ++ show 
     b'' <- Tp <$> reduce ((newVar s a c, Nothing) : e) b
     b''' <- Tp <$> reduce ((newVar s' a c, Nothing) : e') b'
     unifyType c b'' b'''
+  unifyType' _ (Tp REmpty) (Tp REmpty) = return ()
   unifyType' _ _ _ = fail "Cannot unify types"
 
 unifyIrreducible :: MonadTrace m => Ctx -> Irreducible -> Irreducible -> m ()
@@ -40,4 +42,13 @@ unifyIrreducible c (IApp f x a) (IApp g y b) = do
   unifyIrreducible c f g
   unifyType c a b
   unify c a x y
+unifyIrreducible c (IEmptyElim u a x) (IEmptyElim v b y) = do
+  unifyLevel u v
+  a' <- Tp <$> reduceApp a (RIrreducible x (Tp REmpty))
+  b' <- Tp <$> reduceApp b (RIrreducible y (Tp REmpty))
+  unifyType c a' b' -- I suspect this is not actually necessary
 unifyIrreducible _ _ _ = fail "Cannot unify irreducibles"
+
+unifyLevel :: MonadFail m => RLevel -> RLevel -> m ()
+unifyLevel u v | u == v = return ()
+               | otherwise = fail "Universe levels are not equal"

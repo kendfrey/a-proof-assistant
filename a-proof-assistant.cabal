@@ -32,6 +32,7 @@ library
       Reduce
       Syntax
       Unify
+      VarNames
   other-modules:
       Paths_a_proof_assistant
   hs-source-dirs:

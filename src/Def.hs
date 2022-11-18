@@ -10,9 +10,18 @@ import Syntax
 
 defaultCtx :: Ctx
 defaultCtx = Ctx []
-  |- Def "Type"
+  |- Def vType
     (Tp (RType (rlPlus (rlVar 0 "u") 1)))
-    (RType (rlVar 0 "u")) (Just (TLDef 1 True))
+    (RType (rlVar 0 "u"))
+    (Just (TLDef 1 True))
+  |- Def vEmpty
+    (Tp (RType (rlLevel 0)))
+    REmpty
+    (Just (TLDef 0 True))
+  |- Def vEmptyElim
+    (Tp (RPi (Tp (RPi (Tp REmpty) ("_", TType (rlVar 0 "u"), []))) ("P", TPi "x" TEmpty (TApp (TVar "P" [] 1) (TVar "x" [] 0)), [])))
+    (RLam ("P", TLam "x" (TEmptyElim (rlVar 0 "u") (TVar "P" [] 1) (TVar "x" [] 0)), []))
+    (Just (TLDef 1 True))
 
 addDef :: String -> [String] -> Preterm -> Preterm -> StateT Ctx (AccumT [Goal] Error) ()
 addDef s u a x = mapStateT (mapAccumT (trace ("\nAdding a definition '" ++ s ++ "' with type " ++ show a ++ " and value " ++ show x))) $ do
