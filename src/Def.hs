@@ -22,6 +22,18 @@ defaultCtx = Ctx []
     (Tp (RPi (Tp (RPi (Tp REmpty) ("_", TType (rlVar 0 "u"), []))) ("P", TPi "x" TEmpty (TApp (TVar "P" [] 1) (TVar "x" [] 0)), [])))
     (RLam ("P", TLam "x" (TEmptyElim (rlVar 0 "u") (TVar "P" [] 1) (TVar "x" [] 0)), []))
     (Just (TLDef 1 True))
+  |- Def vUnit
+    (Tp (RType (rlLevel 0)))
+    RUnit
+    (Just (TLDef 0 True))
+  |- Def vStar
+    (Tp RUnit)
+    RStar
+    (Just (TLDef 0 True))
+  |- Def vUnitElim
+    (Tp (RPi (Tp (RPi (Tp RUnit) ("_", TType (rlVar 0 "u"), []))) ("P", TPi "_" (TApp (TVar "P" [] 0) TStar) (TPi "x" TUnit (TApp (TVar "P" [] 2) (TVar "x" [] 0))), [])))
+    (RLam ("P", TLam "s" (TLam "x" (TVar "s" [] 1)), []))
+    (Just (TLDef 1 True))
 
 addDef :: String -> [String] -> Preterm -> Preterm -> StateT Ctx (AccumT [Goal] Error) ()
 addDef s u a x = mapStateT (mapAccumT (trace ("\nAdding a definition '" ++ s ++ "' with type " ++ show a ++ " and value " ++ show x))) $ do

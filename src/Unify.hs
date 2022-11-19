@@ -15,6 +15,7 @@ unify _c _a _x _y = trace ("\nUnifying " ++ show (quote _x) ++ " and " ++ show (
     b' <- Tp <$> reduce ((v, Nothing) : e) b
     unify (c |- Def s a v Nothing) b' x y
   unify' _ (Tp REmpty) _ _ = return ()
+  unify' _ (Tp RUnit) _ _ = return ()
   unify' c _ (RIrreducible x _) (RIrreducible y _) = unifyIrreducible c x y
   unify' _ _ _ _ = fail "Cannot unify"
 
@@ -30,6 +31,7 @@ unifyType _c _a _b = trace ("\nUnifying " ++ show (quote _a) ++ " and " ++ show 
     b''' <- Tp <$> reduce ((newVar s' a c, Nothing) : e') b'
     unifyType c b'' b'''
   unifyType' _ (Tp REmpty) (Tp REmpty) = return ()
+  unifyType' _ (Tp RUnit) (Tp RUnit) = return ()
   unifyType' _ _ _ = fail "Cannot unify types"
 
 unifyIrreducible :: MonadTrace m => Ctx -> Irreducible -> Irreducible -> m ()

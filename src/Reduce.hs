@@ -24,6 +24,8 @@ reduce e (TEmptyElim u a x) = do
   a' <- reduce e a
   x' <- reduce e x
   reduceEmptyElim u a' x'
+reduce _ TUnit = return RUnit
+reduce _ TStar = return RStar
 
 reduceApp :: MonadTrace m => RTerm -> RTerm -> m RTerm
 reduceApp (RIrreducible f (Tp (RPi a (_, b, e)))) x = do

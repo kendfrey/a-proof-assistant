@@ -81,6 +81,8 @@ data Term
   | TApp Term Term
   | TEmpty
   | TEmptyElim RLevel Term Term
+  | TUnit
+  | TStar
 
 instance Quotable Term where
   quote (TVar s u _) = Var s (map quoteLevel u)
@@ -91,6 +93,8 @@ instance Quotable Term where
   quote (TApp f x) = App (quote f) (quote x)
   quote TEmpty = var vEmpty
   quote (TEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
+  quote TUnit = var vUnit
+  quote TStar = var vStar
 
 type Env = [(RTerm, Maybe Int)]
 
@@ -102,6 +106,8 @@ data RTerm
   | RPi RTypeTerm Closure
   | RLam Closure
   | REmpty
+  | RUnit
+  | RStar
 
 instance Quotable RTerm where
   quote (RIrreducible x _) = quote x
@@ -109,6 +115,8 @@ instance Quotable RTerm where
   quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
   quote (RLam (s, x, _)) = Lam s (quote x)
   quote REmpty = var vEmpty
+  quote RUnit = var vUnit
+  quote RStar = var vStar
 
 data Irreducible
   = IVar String [RLevel] Int
@@ -187,6 +195,8 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsRT (RPi (Tp a) (s, b, e)) = RPi (Tp (substLevelsRT a)) (s, substLevelsT b, map substLevelsEnv e)
   substLevelsRT (RLam (s, x, e)) = RLam (s, substLevelsT x, map substLevelsEnv e)
   substLevelsRT REmpty = REmpty
+  substLevelsRT RUnit = RUnit
+  substLevelsRT RStar = RStar
   substLevelsIrr :: Irreducible -> Irreducible
   substLevelsIrr (IVar s v n) = IVar s (map subst v) n
   substLevelsIrr (IMVar n) = IMVar n
@@ -201,6 +211,8 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsT (TApp f x) = TApp (substLevelsT f) (substLevelsT x)
   substLevelsT TEmpty = TEmpty
   substLevelsT (TEmptyElim v a x) = TEmptyElim (subst v) (substLevelsT a) (substLevelsT x)
+  substLevelsT TUnit = TUnit
+  substLevelsT TStar = TStar
   substLevelsEnv :: (RTerm, Maybe Int) -> (RTerm, Maybe Int)
   substLevelsEnv (x, Nothing) = (substLevelsRT x, Nothing)
   substLevelsEnv x = x

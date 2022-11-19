@@ -42,3 +42,9 @@ test = do
   addDef "absurd'" []
     (Pi "x" (var vEmpty) (App (App (Var vEmptyElim [Level 1]) (lam (Var vType [Level 0]))) (var "x")))
     (Lam "x" (App (App (Var vEmptyElim [Level 0]) (App (Var vEmptyElim [Level 1]) (lam (Var vType [Level 0])))) Hole))
+  addDef "fromUnit" ["u"]
+    (Pi "A" (Var vType [LVar "u"]) (fun (fun (var vUnit) (var "A")) (var "A")))
+    (Lam "A" (Lam "s" (App (var "s") (var vStar))))
+  addDef "castUnit" ["u"]
+    (Pi "P" (fun (var vUnit) (Var vType [LVar "u"])) (Pi "x" (var vUnit) (Pi "y" (var vUnit) (fun (App (var "P") (var "x")) (App (var "P") (var "y"))))))
+    (Lam "P" (Lam "x" (Lam "y" (Lam "h" (var "h")))))
