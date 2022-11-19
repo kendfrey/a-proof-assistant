@@ -48,3 +48,9 @@ test = do
   addDef "castUnit" ["u"]
     (Pi "P" (fun (var vUnit) (Var vType [LVar "u"])) (Pi "x" (var vUnit) (Pi "y" (var vUnit) (fun (App (var "P") (var "x")) (App (var "P") (var "y"))))))
     (Lam "P" (Lam "x" (Lam "y" (Lam "h" (var "h")))))
+  addDef "if" ["u"]
+    (Pi "A" (Var vType [LVar "u"]) (fun (var vBool) (fun (var "A") (fun (var "A") (var "A")))))
+    (Lam "A" (Lam "b" (Lam "t" (Lam "f" (App (App (App (App (Var vBoolElim [LVar "u"]) (lam (var "A"))) (var "t")) (var "f")) (var "b"))))))
+  addDef "star'" []
+    (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var vTrue)) (var vUnit)) (var vEmpty))
+    (var vStar)

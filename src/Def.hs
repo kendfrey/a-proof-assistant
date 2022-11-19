@@ -34,6 +34,22 @@ defaultCtx = Ctx []
     (Tp (RPi (Tp (RPi (Tp RUnit) ("_", TType (rlVar 0 "u"), []))) ("P", TPi "_" (TApp (TVar "P" [] 0) TStar) (TPi "x" TUnit (TApp (TVar "P" [] 2) (TVar "x" [] 0))), [])))
     (RLam ("P", TLam "s" (TLam "x" (TVar "s" [] 1)), []))
     (Just (TLDef 1 True))
+  |- Def vBool
+    (Tp (RType (rlLevel 0)))
+    RBool
+    (Just (TLDef 0 True))
+  |- Def vTrue
+    (Tp RBool)
+    RTrue
+    (Just (TLDef 0 True))
+  |- Def vFalse
+    (Tp RBool)
+    RFalse
+    (Just (TLDef 0 True))
+  |- Def vBoolElim
+    (Tp (RPi (Tp (RPi (Tp RBool) ("_", TType (rlVar 0 "u"), []))) ("P", TPi "_" (TApp (TVar "P" [] 0) TTrue) (TPi "_" (TApp (TVar "P" [] 1) TFalse) (TPi "x" TBool (TApp (TVar "P" [] 3) (TVar "x" [] 0)))), [])))
+    (RLam ("P", TLam "t" (TLam "f" (TLam "x" (TBoolElim (rlVar 0 "u") (TVar "P" [] 3) (TVar "t" [] 2) (TVar "f" [] 1) (TVar "x" [] 0)))), []))
+    (Just (TLDef 1 True))
 
 addDef :: String -> [String] -> Preterm -> Preterm -> StateT Ctx (AccumT [Goal] Error) ()
 addDef s u a x = mapStateT (mapAccumT (trace ("\nAdding a definition '" ++ s ++ "' with type " ++ show a ++ " and value " ++ show x))) $ do

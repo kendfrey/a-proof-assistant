@@ -83,6 +83,10 @@ data Term
   | TEmptyElim RLevel Term Term
   | TUnit
   | TStar
+  | TBool
+  | TTrue
+  | TFalse
+  | TBoolElim RLevel Term Term Term Term
 
 instance Quotable Term where
   quote (TVar s u _) = Var s (map quoteLevel u)
@@ -95,6 +99,10 @@ instance Quotable Term where
   quote (TEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
   quote TUnit = var vUnit
   quote TStar = var vStar
+  quote TBool = var vBool
+  quote TTrue = var vTrue
+  quote TFalse = var vFalse
+  quote (TBoolElim u a t f x) = App (App (App (App (Var vBoolElim [quoteLevel u]) (quote a)) (quote t)) (quote f)) (quote x)
 
 type Env = [(RTerm, Maybe Int)]
 
@@ -108,6 +116,9 @@ data RTerm
   | REmpty
   | RUnit
   | RStar
+  | RBool
+  | RTrue
+  | RFalse
 
 instance Quotable RTerm where
   quote (RIrreducible x _) = quote x
@@ -117,18 +128,23 @@ instance Quotable RTerm where
   quote REmpty = var vEmpty
   quote RUnit = var vUnit
   quote RStar = var vStar
+  quote RBool = var vBool
+  quote RTrue = var vTrue
+  quote RFalse = var vFalse
 
 data Irreducible
   = IVar String [RLevel] Int
   | IMVar Int
   | IApp Irreducible RTerm RTypeTerm
   | IEmptyElim RLevel RTerm Irreducible
+  | IBoolElim RLevel RTerm RTerm RTerm Irreducible
 
 instance Quotable Irreducible where
   quote (IVar s u _) = Var s (map quoteLevel u)
   quote (IMVar _) = Hole
   quote (IApp f x _) = App (quote f) (quote x)
   quote (IEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
+  quote (IBoolElim u a t f x) = App (App (App (App (Var vBoolElim [quoteLevel u]) (quote a)) (quote t)) (quote f)) (quote x)
 
 newtype RTypeTerm = Tp { tpTerm :: RTerm }
 
@@ -197,11 +213,15 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsRT REmpty = REmpty
   substLevelsRT RUnit = RUnit
   substLevelsRT RStar = RStar
+  substLevelsRT RBool = RBool
+  substLevelsRT RTrue = RTrue
+  substLevelsRT RFalse = RFalse
   substLevelsIrr :: Irreducible -> Irreducible
   substLevelsIrr (IVar s v n) = IVar s (map subst v) n
   substLevelsIrr (IMVar n) = IMVar n
   substLevelsIrr (IApp f x (Tp a)) = IApp (substLevelsIrr f) (substLevelsRT x) (Tp (substLevelsRT a))
   substLevelsIrr (IEmptyElim v a x) = IEmptyElim (subst v) (substLevelsRT a) (substLevelsIrr x)
+  substLevelsIrr (IBoolElim v a t f x) = IBoolElim (subst v) (substLevelsRT t) (substLevelsRT f) (substLevelsRT a) (substLevelsIrr x)
   substLevelsT :: Term -> Term
   substLevelsT (TVar s v n) = TVar s (map subst v) n
   substLevelsT (THole n (Tp a)) = THole n (Tp (substLevelsRT a))
@@ -213,6 +233,10 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsT (TEmptyElim v a x) = TEmptyElim (subst v) (substLevelsT a) (substLevelsT x)
   substLevelsT TUnit = TUnit
   substLevelsT TStar = TStar
+  substLevelsT TBool = TBool
+  substLevelsT TTrue = TTrue
+  substLevelsT TFalse = TFalse
+  substLevelsT (TBoolElim v a t f x) = TBoolElim (subst v) (substLevelsT a) (substLevelsT t) (substLevelsT f) (substLevelsT x)
   substLevelsEnv :: (RTerm, Maybe Int) -> (RTerm, Maybe Int)
   substLevelsEnv (x, Nothing) = (substLevelsRT x, Nothing)
   substLevelsEnv x = x

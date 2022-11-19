@@ -26,6 +26,15 @@ reduce e (TEmptyElim u a x) = do
   reduceEmptyElim u a' x'
 reduce _ TUnit = return RUnit
 reduce _ TStar = return RStar
+reduce _ TBool = return RBool
+reduce _ TTrue = return RTrue
+reduce _ TFalse = return RFalse
+reduce e (TBoolElim u a t f x) = do
+  a' <- reduce e a
+  t' <- reduce e t
+  f' <- reduce e f
+  x' <- reduce e x
+  reduceBoolElim u a' t' f' x'
 
 reduceApp :: MonadTrace m => RTerm -> RTerm -> m RTerm
 reduceApp (RIrreducible f (Tp (RPi a (_, b, e)))) x = do
@@ -35,7 +44,15 @@ reduceApp (RLam (_, f, e)) x = reduce ((x, Nothing) : e) f
 reduceApp _ _ = fail "Function expected"
 
 reduceEmptyElim :: MonadTrace m => RLevel -> RTerm -> RTerm -> m RTerm
-reduceEmptyElim u a x'@(RIrreducible x (Tp REmpty)) = do
+reduceEmptyElim u a x'@(RIrreducible x _) = do
   a' <- Tp <$> reduceApp a x'
   return $ RIrreducible (IEmptyElim u a x) a'
 reduceEmptyElim _ _ _ = fail "Unexpected value of type Empty"
+
+reduceBoolElim :: MonadTrace m => RLevel -> RTerm -> RTerm -> RTerm -> RTerm -> m RTerm
+reduceBoolElim _ _ t _ RTrue = return t
+reduceBoolElim _ _ _ f RFalse = return f
+reduceBoolElim u a t f x'@(RIrreducible x _) = do
+  a' <- Tp <$> reduceApp a x'
+  return $ RIrreducible (IBoolElim u a t f x) a'
+reduceBoolElim _ _ _ _ _ = fail "Bool expected"
