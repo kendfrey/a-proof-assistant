@@ -35,7 +35,7 @@ elaborate _c _u _a _x = mapAccumT (trace ("\nElaborating " ++ show _x ++ " as " 
     if m == n then
       return x'
     else
-      fail "Wrong universe level"
+      fail ("Expected universe level " ++ show (quoteLevel n) ++ " but was " ++ show (quoteLevel m))
   elaborate' c u (Tp (RPi a (s, b, e))) x = elaboratePi c u a s b e x
   elaborate' _ _ (Tp (RIrreducible _ _)) _ = fail "Cannot elaborate as an irreducible type"
   elaborate' _ _ _ _ = fail "Cannot elaborate"

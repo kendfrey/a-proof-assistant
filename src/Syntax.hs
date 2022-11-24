@@ -79,6 +79,9 @@ data Term
   | TPi String Term Term
   | TLam String Term
   | TApp Term Term
+  | TEq RLevel Term Term Term
+  | TRefl RLevel Term Term
+  | TEqElim RLevel RLevel Term Term Term Term Term Term
   | TEmpty
   | TEmptyElim RLevel Term Term
   | TUnit
@@ -95,6 +98,9 @@ instance Quotable Term where
   quote (TPi s a b) = Pi s (quote a) (quote b)
   quote (TLam s x) = Lam s (quote x)
   quote (TApp f x) = App (quote f) (quote x)
+  quote (TEq u a x y) = App (App (App (Var vEq [quoteLevel u]) (quote a)) (quote x)) (quote y)
+  quote (TRefl u a x) = App (App (Var vRefl [quoteLevel u]) (quote a)) (quote x)
+  quote (TEqElim u v a p r x y h) = App (App (App (App (App (App (Var vEqElim [quoteLevel u, quoteLevel v]) (quote a)) (quote p)) (quote r)) (quote x)) (quote y)) (quote h)
   quote TEmpty = var vEmpty
   quote (TEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
   quote TUnit = var vUnit
@@ -113,6 +119,8 @@ data RTerm
   | RType RLevel
   | RPi RTypeTerm Closure
   | RLam Closure
+  | REq RLevel RTypeTerm RTerm RTerm
+  | RRefl RLevel RTypeTerm RTerm
   | REmpty
   | RUnit
   | RStar
@@ -125,6 +133,8 @@ instance Quotable RTerm where
   quote (RType n) = Var vType [quoteLevel n]
   quote (RPi (Tp a) (s, b, _)) = Pi s (quote a) (quote b)
   quote (RLam (s, x, _)) = Lam s (quote x)
+  quote (REq u a x y) = App (App (App (Var vEq [quoteLevel u]) (quote a)) (quote x)) (quote y)
+  quote (RRefl u a x) = App (App (Var vRefl [quoteLevel u]) (quote a)) (quote x)
   quote REmpty = var vEmpty
   quote RUnit = var vUnit
   quote RStar = var vStar
@@ -136,6 +146,7 @@ data Irreducible
   = IVar String [RLevel] Int
   | IMVar Int
   | IApp Irreducible RTerm RTypeTerm
+  | IEqElim RLevel RLevel RTypeTerm RTerm RTerm RTerm RTerm Irreducible
   | IEmptyElim RLevel RTerm Irreducible
   | IBoolElim RLevel RTerm RTerm RTerm Irreducible
 
@@ -143,6 +154,7 @@ instance Quotable Irreducible where
   quote (IVar s u _) = Var s (map quoteLevel u)
   quote (IMVar _) = Hole
   quote (IApp f x _) = App (quote f) (quote x)
+  quote (IEqElim u v a p r x y h) = App (App (App (App (App (App (Var vEqElim [quoteLevel u, quoteLevel v]) (quote a)) (quote p)) (quote r)) (quote x)) (quote y)) (quote h)
   quote (IEmptyElim u a x) = App (App (Var vEmptyElim [quoteLevel u]) (quote a)) (quote x)
   quote (IBoolElim u a t f x) = App (App (App (App (Var vBoolElim [quoteLevel u]) (quote a)) (quote t)) (quote f)) (quote x)
 
@@ -210,6 +222,8 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsRT (RType n) = RType (subst n)
   substLevelsRT (RPi (Tp a) (s, b, e)) = RPi (Tp (substLevelsRT a)) (s, substLevelsT b, map substLevelsEnv e)
   substLevelsRT (RLam (s, x, e)) = RLam (s, substLevelsT x, map substLevelsEnv e)
+  substLevelsRT (REq v (Tp a) x y) = REq (subst v) (Tp (substLevelsRT a)) (substLevelsRT x) (substLevelsRT y)
+  substLevelsRT (RRefl v (Tp a) x) = RRefl (subst v) (Tp (substLevelsRT a)) (substLevelsRT x)
   substLevelsRT REmpty = REmpty
   substLevelsRT RUnit = RUnit
   substLevelsRT RStar = RStar
@@ -220,6 +234,7 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsIrr (IVar s v n) = IVar s (map subst v) n
   substLevelsIrr (IMVar n) = IMVar n
   substLevelsIrr (IApp f x (Tp a)) = IApp (substLevelsIrr f) (substLevelsRT x) (Tp (substLevelsRT a))
+  substLevelsIrr (IEqElim v w (Tp a) p r x y h) = IEqElim (subst v) (subst w) (Tp (substLevelsRT a)) (substLevelsRT p) (substLevelsRT r) (substLevelsRT x) (substLevelsRT y) (substLevelsIrr h)
   substLevelsIrr (IEmptyElim v a x) = IEmptyElim (subst v) (substLevelsRT a) (substLevelsIrr x)
   substLevelsIrr (IBoolElim v a t f x) = IBoolElim (subst v) (substLevelsRT t) (substLevelsRT f) (substLevelsRT a) (substLevelsIrr x)
   substLevelsT :: Term -> Term
@@ -229,6 +244,9 @@ substLevels u _x _n | length u == _n = return $ substLevelsRT _x
   substLevelsT (TPi s a b) = TPi s (substLevelsT a) (substLevelsT b)
   substLevelsT (TLam s x) = TLam s (substLevelsT x)
   substLevelsT (TApp f x) = TApp (substLevelsT f) (substLevelsT x)
+  substLevelsT (TEq v a x y) = TEq (subst v) (substLevelsT a) (substLevelsT x) (substLevelsT y)
+  substLevelsT (TRefl v a x) = TRefl (subst v) (substLevelsT a) (substLevelsT x)
+  substLevelsT (TEqElim v w a p r x y h) = TEqElim (subst v) (subst w) (substLevelsT a) (substLevelsT p) (substLevelsT r) (substLevelsT x) (substLevelsT y) (substLevelsT h)
   substLevelsT TEmpty = TEmpty
   substLevelsT (TEmptyElim v a x) = TEmptyElim (subst v) (substLevelsT a) (substLevelsT x)
   substLevelsT TUnit = TUnit

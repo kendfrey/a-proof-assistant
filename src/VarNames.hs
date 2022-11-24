@@ -3,7 +3,10 @@ module VarNames (
   vBoolElim,
   vEmpty,
   vEmptyElim,
+  vEq,
+  vEqElim,
   vFalse,
+  vRefl,
   vStar,
   vTrue,
   vType,
@@ -23,8 +26,17 @@ vEmpty = "Empty"
 vEmptyElim :: String
 vEmptyElim = "Empty.elim"
 
+vEq :: String
+vEq = "Eq"
+
+vEqElim :: String
+vEqElim = "Eq.elim"
+
 vFalse :: String
 vFalse = "false"
+
+vRefl :: String
+vRefl = "refl"
 
 vStar :: String
 vStar = "star"

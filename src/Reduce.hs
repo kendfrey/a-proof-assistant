@@ -19,6 +19,23 @@ reduce e (TApp f x) = do
   f' <- reduce e f
   x' <- reduce e x
   reduceApp f' x'
+reduce e (TEq u a x y) = do
+  a' <- Tp <$> reduce e a
+  x' <- reduce e x
+  y' <- reduce e y
+  return $ REq u a' x' y'
+reduce e (TRefl u a x) = do
+  a' <- Tp <$> reduce e a
+  x' <- reduce e x
+  return $ RRefl u a' x'
+reduce e (TEqElim u v a p r x y h) = do
+  a' <- Tp <$> reduce e a
+  p' <- reduce e p
+  r' <- reduce e r
+  x' <- reduce e x
+  y' <- reduce e y
+  h' <- reduce e h
+  reduceEqElim u v a' p' r' x' y' h'
 reduce _ TEmpty = return REmpty
 reduce e (TEmptyElim u a x) = do
   a' <- reduce e a
@@ -37,11 +54,20 @@ reduce e (TBoolElim u a t f x) = do
   reduceBoolElim u a' t' f' x'
 
 reduceApp :: MonadTrace m => RTerm -> RTerm -> m RTerm
+reduceApp (RLam (_, f, e)) x = reduce ((x, Nothing) : e) f
 reduceApp (RIrreducible f (Tp (RPi a (_, b, e)))) x = do
   b' <- Tp <$> reduce ((x, Nothing) : e) b
   return $ RIrreducible (IApp f x a) b'
-reduceApp (RLam (_, f, e)) x = reduce ((x, Nothing) : e) f
 reduceApp _ _ = fail "Function expected"
+
+reduceEqElim :: MonadTrace m => RLevel -> RLevel -> RTypeTerm -> RTerm -> RTerm -> RTerm -> RTerm -> RTerm -> m RTerm
+reduceEqElim _ _ _ _ r _ _ (RRefl _ _ x) = reduceApp r x
+reduceEqElim u v a p r x y h'@(RIrreducible h _) = do
+  p' <- reduceApp p x
+  p'' <- reduceApp p' y
+  p''' <- Tp <$> reduceApp p'' h'
+  return $ RIrreducible (IEqElim u v a p r x y h) p'''
+reduceEqElim _ _ _ _ _ _ _ _ = fail "Eq expected"
 
 reduceEmptyElim :: MonadTrace m => RLevel -> RTerm -> RTerm -> m RTerm
 reduceEmptyElim u a x'@(RIrreducible x _) = do

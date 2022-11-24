@@ -54,3 +54,33 @@ test = do
   addDef "star'" []
     (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var vTrue)) (var vUnit)) (var vEmpty))
     (var vStar)
+  addDef "Bool.nc" []
+    (fun (var vBool) (fun (var vBool) (Var vType [Level 0])))
+    (Lam "x" (Lam "y" (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var "x")) (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var "y")) (var vUnit)) (var vEmpty))) (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var "y")) (var vEmpty)) (var vUnit)))))
+  addDef "trueEqTrue" []
+    (App (App (App (Var vEq [Level 0]) (var vBool)) (var vTrue)) (var vTrue))
+    (App (App (Var vRefl [Level 0]) (var vBool)) (var vTrue))
+  addDef "trueEqTrue'" []
+    (App (App (var "Bool.nc") (var vTrue)) (var vTrue))
+    (var vStar)
+  addDef "trueNeFalse" []
+    (fun (App (App (App (Var vEq [Level 0]) (var vBool)) (var vTrue)) (var vFalse)) (var vEmpty))
+    --(Lam "h" (App (App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (Lam "x" (Lam "y" (lam (App (App (var "Bool.nc") (var "x")) (var "y")))))) Hole) (var vTrue)) (var vFalse)) (var "h")))
+    --(App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (Lam "x" (Lam "y" (lam (App (App (var "Bool.nc") (var "x")) (var "y")))))) (App (App (App (Var vBoolElim [Level 0]) (Lam "x" (App (App (var "Bool.nc") (var "x")) (var "x")))) (var vStar)) (var vStar))) (var vTrue)) (var vFalse))
+    (Lam "h" (App (App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (Lam "x" (Lam "y" (lam (App (App (var "Bool.nc") (var "x")) (var "y")))))) (App (App (App (Var vBoolElim [Level 0]) (Lam "x" (App (App (var "Bool.nc") (var "x")) (var "x")))) (var vStar)) (var vStar))) (var vTrue)) (var vFalse)) (var "h")))
+  addDef "BoolElimEq" []
+    (Pi "h" (App (App (App (Var vEq [Level 0]) (var vBool)) (var vTrue)) (var vTrue)) (App (App (App (Var vEq [Level 0]) (var vBool))
+      (App (App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (lam (lam (lam (var vBool))))) (lam (var vTrue))) (var vTrue)) (var vTrue)) (var "h")))
+      (App (App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (lam (lam (lam (var vBool))))) (lam (var vTrue))) (var vTrue)) (var vTrue)) (var "h"))))
+    (Lam "h" (App (App (Var vRefl [Level 0]) (var vBool)) (App (App (App (App (App (App (Var vEqElim [Level 0, Level 0]) (var vBool)) (lam (lam (lam (var vBool))))) (lam (var vTrue))) (var vTrue)) (var vTrue)) (var "h"))))
+  addDef "Eq.elim'" ["u", "v"]
+    (Pi "A" (Var vType [LVar "u"]) (Pi "x" (var "A") (Pi "P" (Pi "y" (var "A") (Pi "h" (App (App (App (Var vEq [LVar "u"]) (var "A")) (var "x")) (var "y")) (Var vType [LVar "v"]))) (Pi "r" (App (App (var "P") (var "x")) (App (App (Var vRefl [LVar "u"]) (var "A")) (var "x"))) (Pi "y" (var "A") (Pi "h" (App (App (App (Var vEq [LVar "u"]) (var "A")) (var "x")) (var "y")) (App (App (var "P") (var "y")) (var "h"))))))))
+    --(Lam "A" (Lam "x" (Lam "P" (Lam "r" (Lam "y" (Lam "h" Hole))))))
+    (Lam "A" (Lam "x" (Lam "P" (Lam "r" (Lam "y" (Lam "h" (App (App (App (App (App (App (App (App (Var vEqElim [LVar "u", LMax (LVar "u") (LPlus (LVar "v") 1)]) (var "A")) (Lam "x" (Lam "y" (Lam "h" (Pi "P" (Pi "z" (var "A") (fun (App (App (App (Var vEq [LVar "u"]) (var "A")) (var "x")) (var "z")) (Var vType [LVar "v"]))) (fun (App (App (var "P") (var "x")) (App (App (Var vRefl [LVar "u"]) (var "A")) (var "x"))) (App (App (var "P") (var "y")) (var "h")))))))) (lam (lam (Lam "h" (var "h"))))) (var "x")) (var "y")) (var "h")) (var "P")) (var "r"))))))))
+  addDef "trueNeFalse'" []
+    (fun (App (App (App (Var vEq [Level 0]) (var vBool)) (var vTrue)) (var vFalse)) (var vEmpty))
+    (Lam "h" (App (App (App (App (App (App (Var "Eq.elim'" [Level 0, Level 0]) (var vBool)) (var vTrue)) (Lam "y" (lam (App (App (App (App (Var "if" [Level 1]) (Var vType [Level 0])) (var "y")) (var vUnit)) (var vEmpty))))) (var vStar)) (var vFalse)) (var "h")))
+  addDef "subst" ["u", "v"]
+    (Pi "A" (Var vType [LVar "u"]) (Pi "P" (fun (var "A") (Var vType [LVar "v"])) (Pi "x" (var "A") (Pi "y" (var "A") (fun (App (App (App (Var vEq [LVar "u"]) (var "A")) (var "x")) (var "y")) (fun (App (var "P") (var "x")) (App (var "P") (var "y"))))))))
+    --(Lam "A" (Lam "P" (Lam "x" (Lam "y" (Lam "h" (App (App (App (App (App (App (Var vEqElim [LVar "u", LVar "v"]) (var "A")) (Lam "x" (Lam "y" (lam (fun (App (var "P") (var "x")) (App (var "P") (var "y"))))))) (Lam "x" Hole)) (var "x")) (var "y")) (var "h")))))))
+    (Lam "A" (Lam "P" (App (App (App (Var vEqElim [LVar "u", LVar "v"]) (var "A")) (Lam "x" (Lam "y" (lam (fun (App (var "P") (var "x")) (App (var "P") (var "y"))))))) (lam (Lam "h" (var "h"))))))
